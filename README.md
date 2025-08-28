@@ -2,6 +2,14 @@
 
 A simple console chatbot that asks dietary questions and then generates a multi-day meal plan using an OpenAI model via LangChain.
 
+## Validation Modes
+
+To prevent unhelpful answers, the bot supports **input validation** via an environment flag:
+
+- `VALIDATION_MODE=simple` (default) — fast local checks (numbers, comma-lists, “none”).
+- `VALIDATION_MODE=llm` — semantic checks using a lightweight LLM call; falls back to simple if anything fails.
+- `VALIDATION_MODE=none` — accepts anything (trimmed), no validation.
+
 ## Prerequisites
 - Python 3.10+
 - OpenAI API key
@@ -33,6 +41,9 @@ export OPENAI_API_KEY=your_key_here
 # (Optional) Choose a model & temperature
 export MODEL_NAME=gpt-4o-mini
 export MODEL_TEMPERATURE=0.4
+
+# Optional validation mode: simple | llm | none
+export VALIDATION_MODE=simple
 ```
 
 ## Alternatively, create a .env file in the project root:
@@ -40,6 +51,7 @@ export MODEL_TEMPERATURE=0.4
 OPENAI_API_KEY=your_key_here
 MODEL_NAME=gpt-4o-mini
 MODEL_TEMPERATURE=0.4
+VALIDATION_MODE=simple
 ```
 
 ## Run the chatbot

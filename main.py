@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 from typing import Dict, List, Literal, Optional, TypedDict
+import json
 
 from dotenv import load_dotenv
 from rich import print as rprint
@@ -10,6 +11,8 @@ from rich.table import Table
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
+
+VALIDATION_MODE = os.getenv("VALIDATION_MODE", "llm").lower()  # "none"|"simple"|"llm"
 
 # ------------------------------
 # Configuration
@@ -85,22 +88,142 @@ def node_ask(state: ChatState) -> ChatState:
     state["stage"] = "store"
     return state
 
+def llm_validate_answer(key: str, answer: str) -> Optional[Dict[str, str]]:
+    """
+    Use an LLM to semantically validate/normalize an answer.
+    Returns a dict like:
+      {"is_valid": true/false, "cleaned": "<normalized>", "message": "<optional re-ask>"}
+    or None on any failure (so we can fall back).
+    """
+    try:
+        model = get_llm()  # reuse your existing ChatOpenAI
+        schema_hint = {
+            "age": "an integer number of years",
+            "height_cm": "a number in centimeters",
+            "weight_kg": "a number in kilograms",
+            "meals_per_day": "an integer count of meals per day",
+            "plan_duration_days": "an integer number of days",
+            "liked_foods": "a comma-separated list of foods",
+            "disliked_foods": "a comma-separated list of foods",
+            "allergies": "a comma-separated list of allergens or the word 'none'",
+            "special_needs": "free text describing dietary needs",
+            "meals_target": "a comma-separated list of meals (e.g., breakfast, lunch, dinner, snacks)",
+            "name": "a human name (free text)",
+        }.get(key, "free text")
+
+        system = (
+            "You evaluate a single user answer for a specific field and decide if it fits the expected type. "
+            "If invalid, provide a short and polite re-ask message explaining the correct format. "
+            "If valid, normalize it (trim spaces, consistent commas) but do not invent data. "
+            "Respond as strict JSON only with keys: is_valid (bool), cleaned (string), message (string)."
+        )
+        user = f"""
+            Field key: {key}
+            Expected type: {schema_hint}
+            User answer: {answer}
+            Return JSON only.
+        """
+
+        resp = model.invoke([{"role": "system", "content": system},
+                             {"role": "user", "content": user}])
+        text = resp.content.strip()
+        # Robust JSON extraction
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1:
+            return None
+        data = json.loads(text[start:end+1])
+        # Minimal sanity checks
+        if not isinstance(data, dict):
+            return None
+        if "is_valid" not in data or "cleaned" not in data:
+            return None
+        return {
+            "is_valid": bool(data.get("is_valid")),
+            "cleaned": str(data.get("cleaned") or "").strip(),
+            "message": str(data.get("message") or "").strip(),
+        }
+    except Exception:
+        # Never let validation break the chat flow
+        return None
+
+def simple_validate_answer(key: str, answer: str) -> Optional[str]:
+    """Fast local rules; return cleaned answer or None if invalid."""
+    a = (answer or "").strip()
+    if key in {"age", "height_cm", "weight_kg", "meals_per_day", "plan_duration_days"}:
+        # Allow integers; you can expand to floats for height/weight if you like
+        if a.isdigit():
+            return a
+        return None
+
+    if key in {"liked_foods", "disliked_foods", "allergies", "meals_target"}:
+        if a.lower() == "none" and key == "allergies":
+            return "none"
+        # Normalize comma lists
+        parts = [p.strip() for p in a.split(",") if p.strip()]
+        if parts:
+            return ", ".join(parts)
+        return None
+
+    # Free-text fields
+    return a or None
+
+
+def validate_answer(key: str, answer: str) -> Optional[str]:
+    """
+    Unified validator:
+      - if VALIDATION_MODE == 'llm', try LLM validation first, fallback to simple.
+      - if 'simple', use local rules.
+      - if 'none', accept anything (trimmed).
+    """
+    a = (answer or "").strip()
+    if VALIDATION_MODE == "none":
+        return a
+
+    if VALIDATION_MODE == "llm":
+        result = llm_validate_answer(key, a)
+        if result is not None:
+            if result.get("is_valid"):
+                cleaned = result.get("cleaned") or a
+                return cleaned.strip()
+            else:
+                # Show the model's gentle re-ask
+                msg = result.get("message") or "Please try again with the expected format."
+                rprint(f"[yellow]{msg}[/yellow]")
+                return None
+        # If LLM fails, fall through to simple rules
+
+    return simple_validate_answer(key, a)
 
 def node_store(state: ChatState) -> ChatState:
-    """Store the last input under the current question key, then advance index."""
     idx = state.get("idx", 0)
     if idx < len(QUESTION_KEYS):
         key = QUESTION_KEYS[idx]
-        ans = state.get("last_input") or ""
-        state.setdefault("answers", {})[key] = ans
+        raw_ans = state.get("last_input") or ""
+        validated = validate_answer(key, raw_ans)
+        if validated is None:
+            # Re-ask same question with a hint for common types
+            hints = {
+                "age": "Enter a whole number (e.g., 30).",
+                "height_cm": "Enter centimeters as a whole number (e.g., 175).",
+                "weight_kg": "Enter kilograms as a whole number (e.g., 70).",
+                "meals_per_day": "Enter a whole number (e.g., 3).",
+                "plan_duration_days": "Enter a whole number (e.g., 7).",
+                "liked_foods": "Provide a comma-separated list (e.g., eggs, oatmeal).",
+                "disliked_foods": "Provide a comma-separated list (e.g., broccoli, tuna).",
+                "allergies": "List allergens comma-separated or 'none'.",
+                "meals_target": "Comma-separated meals (e.g., breakfast, dinner).",
+            }
+            hint = hints.get(key, "Please try again.")
+            rprint(f"[red]That doesn't look valid.[/red] [dim]{hint}[/dim]")
+            state["stage"] = "ask"
+            return state
+
+        state.setdefault("answers", {})[key] = validated
         state["idx"] = idx + 1
 
-    if state["idx"] >= len(QUESTION_KEYS):
-        state["stage"] = "plan"
-    else:
-        state["stage"] = "ask"
+    state["stage"] = "plan" if state["idx"] >= len(QUESTION_KEYS) else "ask"
     return state
-
 
 def node_plan(state: ChatState) -> ChatState:
     """Generate meal recommendations using the LLM based on collected answers."""

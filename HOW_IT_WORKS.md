@@ -18,8 +18,8 @@ This document explains the inner workings of the Meal Planner chatbot built with
 The chatbot follows a deterministic sequence of states:
 
 1. **ask** → prints the current question and waits for input.  
-2. **store** → saves the answer and advances to the next question.  
-3. **plan** → after all questions, calls the LLM to generate the meal plan and shopping list.
+2. **store** → validates & saves the answer, advances to next question (or re-asks on invalid).  
+3. **plan** → after all questions, calls the OpenAI model and prints a multi-day meal plan + shopping list.
 
 Transitions:
 
@@ -84,7 +84,8 @@ ASCII diagram:
 
 - **Change questions** → edit the `QUESTIONS` dictionary in `main.py`.  
 - **Swap the model** → update `get_llm()` to use another LangChain chat model (e.g., Anthropic, Ollama).  
-- **Tweak the output** → modify the system/human prompts in `node_plan` (tone, detail, formatting, shopping list grouping, etc.).
+- **Tweak the output** → adjust the system/human prompts in `node_plan` (tone, detail, grouping, etc.).
+- **Validation hints** → customize the hint messages in node_store for clearer re-prompts.
 
 ---
 
