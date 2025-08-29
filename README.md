@@ -56,5 +56,5 @@ VALIDATION_MODE=simple
 
 ## Run the chatbot
 ```
-python main.py
+python app.py
 ```

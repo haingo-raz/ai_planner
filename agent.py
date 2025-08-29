@@ -4,12 +4,6 @@ Agentic Meal Planner Intake + Plan
 - An agent decides which field to ask next, calls a console ask_user tool,
   validates the response, saves it to profile, and repeats until done.
 - When complete, the agent calls the 'finish' tool and we produce a meal plan.
-
-Env vars:
-  OPENAI_API_KEY (required)
-  MODEL_NAME (default: gpt-4o-mini)
-  MODEL_TEMPERATURE (default: 0.4)
-  VALIDATION_MODE = "llm" | "simple" | "none" (default: "simple")
 """
 
 import os
@@ -50,10 +44,7 @@ FIELD_ORDER: List[str] = list(QUESTIONS.keys())
 
 VALIDATION_MODE = os.getenv("VALIDATION_MODE", "simple").lower()  # "none"|"simple"|"llm"
 
-
-# ------------------------------
 # Types
-# ------------------------------
 
 class AgentState(TypedDict):
     messages: List[object]                 # LangChain message objects (SystemMessage, AIMessage, ToolMessage)
@@ -63,9 +54,7 @@ class AgentState(TypedDict):
     stage: Literal["agent", "tools", "reduce", "plan"]
 
 
-# ------------------------------
 # Pretty printing helpers
-# ------------------------------
 
 def pretty_answers(answers: Dict[str, str]) -> None:
     table = Table(title="Collected Answers")
@@ -76,20 +65,14 @@ def pretty_answers(answers: Dict[str, str]) -> None:
         table.add_row(k, v)
     rprint(table)
 
-
-# ------------------------------
 # LLM factory
-# ------------------------------
 
 def llm() -> ChatOpenAI:
     model = os.getenv("MODEL_NAME", "gpt-4o-mini")
     temperature = float(os.getenv("MODEL_TEMPERATURE", "0.4"))
     return ChatOpenAI(model=model, temperature=temperature)
 
-
-# ------------------------------
-# Validation (simple + optional LLM)
-# ------------------------------
+# Validation
 
 def llm_validate_answer(key: str, answer: str) -> Optional[Dict[str, str]]:
     """
@@ -172,9 +155,7 @@ def validate_answer(key: str, answer: str) -> Optional[str]:
     return simple_validate_answer(key, a)
 
 
-# ------------------------------
 # Tools the agent can call
-# ------------------------------
 
 @tool("ask_user")
 def ask_user(field_key: str, question: str) -> str:
@@ -196,10 +177,7 @@ def finish() -> str:
 TOOLS = [ask_user, finish]
 TOOLS_NODE = ToolNode(TOOLS)
 
-
-# ------------------------------
 # Agent node (policy)
-# ------------------------------
 
 def agent_node(state: AgentState) -> AgentState:
     """LLM policy that decides which tool to call next."""
@@ -220,11 +198,11 @@ def agent_node(state: AgentState) -> AgentState:
         f"\nMissing keys (ordered): {missing}"
     )
 
-    # ⚠️ FILTER OUT ToolMessage objects before calling the model
+    # FILTER OUT ToolMessage objects before calling the model
     from langchain_core.messages import ToolMessage  # local import to avoid top-level circulars
     filtered_history = [m for m in state["messages"] if not isinstance(m, ToolMessage)]
 
-    # Optional: trim very long histories
+    # trim very long histories
     MAX_CTX = 20
     if len(filtered_history) > MAX_CTX:
         filtered_history = filtered_history[-MAX_CTX:]
@@ -235,9 +213,7 @@ def agent_node(state: AgentState) -> AgentState:
     state["messages"].append(ai)  # record the model decision (will contain tool_calls)
     return state
 
-# ------------------------------
 # Reduce node (apply tool results & validation)
-# ------------------------------
 
 def reduce_node(state: AgentState) -> AgentState:
     """
@@ -313,10 +289,7 @@ def reduce_node(state: AgentState) -> AgentState:
     state["messages"].append(SystemMessage(content=f"Observation: unknown tool '{tool_name}'."))
     return state
 
-
-# ------------------------------
 # Planner (final meal plan generation)
-# ------------------------------
 
 def planner_node(state: AgentState) -> AgentState:
     """Generate meal recommendations using collected profile."""
@@ -338,25 +311,25 @@ def planner_node(state: AgentState) -> AgentState:
         return str(ans.get(k, "")).strip()
 
     user = f"""
-Please generate a {duration}-day meal plan.
+        Please generate a {duration}-day meal plan.
 
-Recipient name: {g('name')}
-Age: {g('age')} years
-Height: {g('height_cm')} cm
-Weight: {g('weight_kg')} kg
-Likes: {g('liked_foods')}
-Dislikes: {g('disliked_foods')}
-Allergies: {g('allergies')}
-Special needs: {g('special_needs')}
-Usual meals/day: {g('meals_per_day')}
-Target meals to plan: {g('meals_target')}
+        Recipient name: {g('name')}
+        Age: {g('age')} years
+        Height: {g('height_cm')} cm
+        Weight: {g('weight_kg')} kg
+        Likes: {g('liked_foods')}
+        Dislikes: {g('disliked_foods')}
+        Allergies: {g('allergies')}
+        Special needs: {g('special_needs')}
+        Usual meals/day: {g('meals_per_day')}
+        Target meals to plan: {g('meals_target')}
 
-Output format:
-- A short overview of goals/constraints.
-- A day-by-day plan. For each day, list the target meals (e.g., breakfast/lunch/dinner/snacks)
-- Keep the total output compact but clear.
-- Include a small compact shopping list.
-""".strip()
+        Output format:
+        - A short overview of goals/constraints.
+        - A day-by-day plan. For each day, list the target meals (e.g., breakfast/lunch/dinner/snacks)
+        - Keep the total output compact but clear.
+        - Include a small compact shopping list.
+        """.strip()
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", sys),
@@ -373,10 +346,7 @@ Output format:
 
     return state
 
-
-# ------------------------------
 # Routing helpers
-# ------------------------------
 
 def route_from_agent(state: AgentState) -> str:
     """If the last AI message has tool calls, go to tools; otherwise stay with agent."""
@@ -389,10 +359,7 @@ def route_from_agent(state: AgentState) -> str:
 def route_from_reduce(state: AgentState) -> str:
     return "plan" if state.get("done") else "agent"
 
-
-# ------------------------------
 # Build graph
-# ------------------------------
 
 def build_graph():
     g = StateGraph(AgentState)
@@ -408,10 +375,7 @@ def build_graph():
     g.add_edge("plan", END)
     return g.compile()
 
-
-# ------------------------------
 # Main
-# ------------------------------
 
 def main():
     load_dotenv()
