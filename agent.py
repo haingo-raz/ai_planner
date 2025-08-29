@@ -24,6 +24,7 @@ from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
+from langchain_core.runnables.graph_mermaid import draw_mermaid_png
 
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
@@ -431,9 +432,12 @@ def main():
     }
 
     app = build_graph()
-
-    rprint("[bold]Welcome to the Agentic Meal Planner![/bold]")
-    rprint("I'll ask a few questions (in any order) to personalize your plan.")
+    graph = app.get_graph()
+    png_bytes = draw_mermaid_png(graph.draw_mermaid())
+    with open("agent_flow.png", "wb") as f:
+        f.write(png_bytes)
+        rprint("[bold]Welcome to the Agentic Meal Planner![/bold]")
+        rprint("I'll ask a few questions (in any order) to personalize your plan.")
 
     # Let the graph iterate until it reaches END
     while True:
