@@ -43,7 +43,7 @@ QUESTIONS: Dict[str, str] = {
     "allergies": "Do you have any food allergies? (comma-separated, or 'none')",
     "special_needs": "Any special dietary needs or conditions (e.g., pregnancy, low-sodium)?",
     "meals_per_day": "How many times do you usually eat per day?",
-    "meals_target": "Which meals should we plan for? (e.g., breakfast, lunch, dinner, snacks)",
+    "meals_target": "What meals would you like included in your plan? (e.g., breakfast, lunch, dinner, snacks)",
     "plan_duration_days": "How long should the meal plan be? (number of days)",
 }
 FIELD_ORDER: List[str] = list(QUESTIONS.keys())
@@ -353,9 +353,9 @@ Target meals to plan: {g('meals_target')}
 
 Output format:
 - A short overview of goals/constraints.
-- A day-by-day plan. For each day, list the target meals (e.g., breakfast/lunch/dinner/snacks) with 1–2 options each.
-- Keep the total output compact but clear (aim ~200–400 words per 3 days).
-- Include a small shopping list per 2–3 days (grouped).
+- A day-by-day plan. For each day, list the target meals (e.g., breakfast/lunch/dinner/snacks)
+- Keep the total output compact but clear.
+- Include a small compact shopping list.
 """.strip()
 
     prompt = ChatPromptTemplate.from_messages([
