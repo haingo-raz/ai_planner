@@ -23,9 +23,7 @@ from langchain_core.runnables.graph_mermaid import draw_mermaid_png
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
-# ------------------------------
 # Config & Questions
-# ------------------------------
 
 QUESTIONS: Dict[str, str] = {
     "name": "What's your name?",
@@ -45,7 +43,6 @@ FIELD_ORDER: List[str] = list(QUESTIONS.keys())
 VALIDATION_MODE = os.getenv("VALIDATION_MODE", "simple").lower()  # "none"|"simple"|"llm"
 
 # Types
-
 class AgentState(TypedDict):
     messages: List[object]                 # LangChain message objects (SystemMessage, AIMessage, ToolMessage)
     profile: Dict[str, str]                # gathered answers
@@ -55,7 +52,6 @@ class AgentState(TypedDict):
 
 
 # Pretty printing helpers
-
 def pretty_answers(answers: Dict[str, str]) -> None:
     table = Table(title="Collected Answers")
     table.add_column("Field", style="bold")
@@ -66,14 +62,12 @@ def pretty_answers(answers: Dict[str, str]) -> None:
     rprint(table)
 
 # LLM factory
-
 def llm() -> ChatOpenAI:
     model = os.getenv("MODEL_NAME", "gpt-4o-mini")
     temperature = float(os.getenv("MODEL_TEMPERATURE", "0.4"))
     return ChatOpenAI(model=model, temperature=temperature)
 
 # Validation
-
 def llm_validate_answer(key: str, answer: str) -> Optional[Dict[str, str]]:
     """
     Semantic validation via LLM. Returns:
@@ -156,7 +150,6 @@ def validate_answer(key: str, answer: str) -> Optional[str]:
 
 
 # Tools the agent can call
-
 @tool("ask_user")
 def ask_user(field_key: str, question: str) -> str:
     """Ask the human a question for a specific field. Returns JSON: {"field_key": "...", "answer": "..."}"""
@@ -178,7 +171,6 @@ TOOLS = [ask_user, finish]
 TOOLS_NODE = ToolNode(TOOLS)
 
 # Agent node (policy)
-
 def agent_node(state: AgentState) -> AgentState:
     """LLM policy that decides which tool to call next."""
     # Force the assistant to call a tool each turn (no free-form replies)
@@ -214,7 +206,6 @@ def agent_node(state: AgentState) -> AgentState:
     return state
 
 # Reduce node (apply tool results & validation)
-
 def reduce_node(state: AgentState) -> AgentState:
     """
     After the tools run, inspect the last ToolMessage and update profile / flow.
@@ -290,7 +281,6 @@ def reduce_node(state: AgentState) -> AgentState:
     return state
 
 # Planner (final meal plan generation)
-
 def planner_node(state: AgentState) -> AgentState:
     """Generate meal recommendations using collected profile."""
     ans = state["profile"]
@@ -347,7 +337,6 @@ def planner_node(state: AgentState) -> AgentState:
     return state
 
 # Routing helpers
-
 def route_from_agent(state: AgentState) -> str:
     """If the last AI message has tool calls, go to tools; otherwise stay with agent."""
     last = next((m for m in reversed(state["messages"]) if isinstance(m, AIMessage)), None)
@@ -360,7 +349,6 @@ def route_from_reduce(state: AgentState) -> str:
     return "plan" if state.get("done") else "agent"
 
 # Build graph
-
 def build_graph():
     g = StateGraph(AgentState)
     g.add_node("agent", agent_node)
@@ -376,7 +364,6 @@ def build_graph():
     return g.compile()
 
 # Main
-
 def main():
     load_dotenv()
 
@@ -413,13 +400,10 @@ def main():
             # Planner node will be triggered by routing; continue until END.
             pass
         # END is handled inside the graph; the loop exits when invoke stops making progress.
-        # To be explicit, we can break after a plan is printed:
-        # (But here we trust the END edge.)
         if not any(isinstance(m, AIMessage) for m in state["messages"][-3:]) and state.get("done"):
             break
 
     rprint("\n[bold]All set. Goodbye![/bold]")
-
 
 if __name__ == "__main__":
     main()
