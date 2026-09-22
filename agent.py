@@ -8,7 +8,7 @@ Agentic Meal Planner Intake + Plan
 
 import os
 import json
-from typing import Dict, List, Optional, TypedDict, Literal
+from typing import Dict, List, Optional, TypedDict
 
 from dotenv import load_dotenv
 from rich import print as rprint
@@ -18,7 +18,6 @@ from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langchain_core.runnables.graph_mermaid import draw_mermaid_png
 
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
@@ -34,21 +33,17 @@ QUESTIONS: Dict[str, str] = {
     "disliked_foods": "Any foods you dislike? (comma-separated)",
     "allergies": "Do you have any food allergies? (comma-separated, or 'none')",
     "special_needs": "Any special dietary needs or conditions (e.g., pregnancy, low-sodium)?",
-    "meals_per_day": "How many times do you usually eat per day?",
-    "meals_target": "What meals would you like included in your plan? (e.g., breakfast, lunch, dinner, snacks)",
+    "meals_to_plan": "Which meals would you like included in your plan? (e.g., breakfast, lunch, dinner, snacks)",
     "plan_duration_days": "How long should the meal plan be? (number of days)",
 }
-FIELD_ORDER: List[str] = list(QUESTIONS.keys())
 
-VALIDATION_MODE = os.getenv("VALIDATION_MODE", "simple").lower()  # "none"|"simple"|"llm"
+REQUIRED_FIELDS: List[str] = list(QUESTIONS.keys())
 
-# Types
 class AgentState(TypedDict):
     messages: List[object]                 # LangChain message objects (SystemMessage, AIMessage, ToolMessage)
     profile: Dict[str, str]                # gathered answers
     done: bool                             # finish signal
     last_field: Optional[str]              # for reference/UX
-    stage: Literal["agent", "tools", "reduce", "plan"]
 
 
 # Pretty printing helpers
@@ -56,14 +51,14 @@ def pretty_answers(answers: Dict[str, str]) -> None:
     table = Table(title="Collected Answers")
     table.add_column("Field", style="bold")
     table.add_column("Answer")
-    for k in FIELD_ORDER:
+    for k in REQUIRED_FIELDS:
         v = answers.get(k, "")
         table.add_row(k, v)
     rprint(table)
 
 # LLM factory
 def llm() -> ChatOpenAI:
-    model = os.getenv("MODEL_NAME", "gpt-4o-mini")
+    model = os.getenv("MODEL_NAME")
     temperature = float(os.getenv("MODEL_TEMPERATURE", "0.4"))
     return ChatOpenAI(model=model, temperature=temperature)
 
@@ -79,26 +74,26 @@ def llm_validate_answer(key: str, answer: str) -> Optional[Dict[str, str]]:
             "age": "an integer number of years",
             "height_cm": "a number in centimeters",
             "weight_kg": "a number in kilograms",
-            "meals_per_day": "an integer count of meals per day",
+            "meals_to_plan": "a comma-separated list of meals (e.g., breakfast, lunch, dinner, snacks)",
             "plan_duration_days": "an integer number of days",
             "liked_foods": "a comma-separated list of foods",
-            "disliked_foods": "a comma-separated list of foods",
-            "allergies": "a comma-separated list of allergens or the word 'none'",
-            "special_needs": "free text describing dietary needs",
-            "meals_target": "a comma-separated list of meals (e.g., breakfast, lunch, dinner, snacks)",
+            "disliked_foods": "a comma-separated list of foods, or 'none' / 'no' if they have no dislikes",
+            "allergies": "a comma-separated list of allergens, or 'none' / 'no' if they have no allergies",
+            "special_needs": "free text describing dietary needs, or 'none' / 'no' if they have none",
+            "meals_to_plan": "a comma-separated list of meals (e.g., breakfast, lunch, dinner, snacks)",
             "name": "a human name (free text)",
         }.get(key, "free text")
 
         system = (
             "You validate a user answer for a specific field. Decide if it fits the expected type. "
-            "If invalid, provide a short polite re-ask tip. If valid, normalize it (trim, commas). "
+            "If invalid, provide a short polite re-ask tip. If valid, normalize it (trim, commas) if necessary. "
             "Respond STRICT JSON with keys: is_valid (bool), cleaned (string), message (string)."
         )
         user = f"Field key: {key}\nExpected type: {schema_hint}\nUser answer: {answer}\nReturn JSON only."
 
-        resp = model.invoke([{"role": "system", "content": system},
+        response = model.invoke([{"role": "system", "content": system},
                              {"role": "user", "content": user}])
-        text = resp.content.strip()
+        text = response.content.strip()
         start, end = text.find("{"), text.rfind("}")
         if start == -1 or end == -1:
             return None
@@ -114,42 +109,38 @@ def llm_validate_answer(key: str, answer: str) -> Optional[Dict[str, str]]:
         return None
 
 
-def simple_validate_answer(key: str, answer: str) -> Optional[str]:
-    """Fast local rules; return cleaned answer or None if invalid."""
-    a = (answer or "").strip()
-    if key in {"age", "height_cm", "weight_kg", "meals_per_day", "plan_duration_days"}:
-        if a.isdigit():
-            return a
-        return None
-    if key in {"liked_foods", "disliked_foods", "allergies", "meals_target"}:
-        if a.lower() == "none" and key == "allergies":
-            return "none"
-        parts = [p.strip() for p in a.split(",") if p.strip()]
-        if parts:
-            return ", ".join(parts)
-        return None
-    return a or None
-
-
 def validate_answer(key: str, answer: str) -> Optional[str]:
-    """Unified validator according to VALIDATION_MODE."""
     a = (answer or "").strip()
-    if VALIDATION_MODE == "none":
-        return a
-    if VALIDATION_MODE == "llm":
-        res = llm_validate_answer(key, a)
-        if res is not None:
-            if res.get("is_valid"):
-                return (res.get("cleaned") or a).strip()
-            else:
-                msg = res.get("message") or "Please try again with the expected format."
-                rprint(f"[yellow]{msg}[/yellow]")
-                return None
-        # LLM failed → fall through
-    return simple_validate_answer(key, a)
+
+    OPTIONAL_FIELDS = {"disliked_foods", "allergies", "special_needs"}
+
+    if key in OPTIONAL_FIELDS:
+        negative_answers = {"no", "none", "n/a", "na", "not applicable", "nothing", "nope", "nil"}
+        if a.lower().strip() in negative_answers:
+            return "none"
+
+    if not a:
+        rprint("[yellow]Answer cannot be empty.[/yellow]")
+        return None
+
+    if key in {"age", "height_cm", "weight_kg", "meals_to_plan", "plan_duration_days"}:
+        digits = "".join(ch for ch in a if ch.isdigit())
+        if digits:
+            return digits
+        rprint("[yellow]Please enter a valid whole number.[/yellow]")
+        return None
+
+    res = llm_validate_answer(key, a)
+    if res is not None:
+        if res.get("is_valid"):
+            return (res.get("cleaned") or a).strip()
+        else:
+            msg = res.get("message") or "Please try again with the expected format."
+            rprint(f"[yellow]{msg}[/yellow]")
+            return None
 
 
-# Tools the agent can call
+# List of Tools
 @tool("ask_user")
 def ask_user(field_key: str, question: str) -> str:
     """Ask the human a question for a specific field. Returns JSON: {"field_key": "...", "answer": "..."}"""
@@ -168,50 +159,40 @@ def finish() -> str:
 
 
 TOOLS = [ask_user, finish]
-TOOLS_NODE = ToolNode(TOOLS)
+tools_node = ToolNode(TOOLS)
 
-# Agent node (policy)
+# List of nodes
 def agent_node(state: AgentState) -> AgentState:
     """LLM policy that decides which tool to call next."""
     # Force the assistant to call a tool each turn (no free-form replies)
     model = llm().bind_tools(TOOLS, tool_choice="required")
 
     # Build the system prompt reflecting current profile
-    known = {k: v for k, v in state["profile"].items() if v}
-    missing = [k for k in FIELD_ORDER if not state["profile"].get(k)]
+    known_fields = {k: v for k, v in state["profile"].items() if v}
+    missing_fields = [k for k in REQUIRED_FIELDS if not state["profile"].get(k)]
     system_text = (
-        "You are an intake agent collecting dietary info to prepare a meal plan. "
-        "Always use the ask_user tool to ask exactly ONE concise question for one missing field at a time. "
-        f"Allowed field keys (use exactly): {FIELD_ORDER}. "
+        "You are an intake agent collecting dietary information to prepare a meal plan. "
+        "Use the ask_user tool to ask exactly ONE question to gather the user's information one missing field at a time. "
+        f"Allowed field keys: {REQUIRED_FIELDS}. "
         "If all required fields are filled, call the finish tool. "
         "Be friendly and specific. Prefer numeric clarifications for number fields. "
-        "Avoid repeating questions if the answer is already present."
-        f"\n\nKnown profile (JSON): {json.dumps(known, ensure_ascii=False)}"
-        f"\nMissing keys (ordered): {missing}"
+        "Avoid repeating the same or paraphrased questions if the answer is already present."
+        f"\n\nKnown profile (JSON): {json.dumps(known_fields, ensure_ascii=False)}"
+        f"\nMissing keys (ordered): {missing_fields}"
     )
 
-    # FILTER OUT ToolMessage objects before calling the model
-    from langchain_core.messages import ToolMessage  # local import to avoid top-level circulars
-    filtered_history = [m for m in state["messages"] if not isinstance(m, ToolMessage)]
-
-    # trim very long histories
-    MAX_CTX = 20
-    if len(filtered_history) > MAX_CTX:
-        filtered_history = filtered_history[-MAX_CTX:]
-
-    model_messages = [SystemMessage(content=system_text), *filtered_history]
+    model_messages = [SystemMessage(content=system_text)]
 
     ai = model.invoke(model_messages)
     state["messages"].append(ai)  # record the model decision (will contain tool_calls)
     return state
 
-# Reduce node (apply tool results & validation)
+
 def reduce_node(state: AgentState) -> AgentState:
     """
     After the tools run, inspect the last ToolMessage and update profile / flow.
     - ask_user → parse JSON {field_key, answer}, validate, save or signal invalid.
     - finish   → mark done=True
-    Then append a short SystemMessage observation so the agent has fresh context.
     """
     # Find the most recent ToolMessage
     tool_msg: Optional[ToolMessage] = None
@@ -229,8 +210,6 @@ def reduce_node(state: AgentState) -> AgentState:
 
     if tool_name == "finish":
         state["done"] = True
-        # Provide a short observation for the agent (not strictly needed now)
-        state["messages"].append(SystemMessage(content="Observation: finish signal received."))
         return state
 
     if tool_name == "ask_user":
@@ -242,77 +221,62 @@ def reduce_node(state: AgentState) -> AgentState:
         raw_answer = str(data.get("answer", "")).strip()
 
         if field_key not in QUESTIONS:
-            state["messages"].append(SystemMessage(
-                content=f"Observation: invalid field_key '{field_key}'. Ask again with a valid key."
-            ))
             return state
 
-        cleaned = validate_answer(field_key, raw_answer)
-        if cleaned is None:
-            # Invalid — give the agent a hint to re-ask
+        cleaned_answer = validate_answer(field_key, raw_answer)
+        if cleaned_answer is None:
             hints = {
                 "age": "Expect a whole number (e.g., 30).",
                 "height_cm": "Enter centimeters as a whole number (e.g., 175).",
                 "weight_kg": "Enter kilograms as a whole number (e.g., 70).",
-                "meals_per_day": "Whole number (e.g., 3).",
+                "meals_to_plan": "Comma-separated meals (e.g., breakfast, lunch, dinner).",
                 "plan_duration_days": "Whole number (e.g., 7).",
                 "liked_foods": "Comma-separated items (e.g., eggs, oatmeal).",
                 "disliked_foods": "Comma-separated items (e.g., broccoli, tuna).",
                 "allergies": "Comma-separated allergens or 'none'.",
-                "meals_target": "Comma-separated meals (e.g., breakfast, dinner).",
             }
             hint = hints.get(field_key, "Please re-ask with a clearer example or format.")
-            state["messages"].append(SystemMessage(
-                content=f"Observation: answer for '{field_key}' invalid. Hint: {hint}"
-            ))
             state["last_field"] = field_key
             return state
 
-        # Valid — save
-        state["profile"][field_key] = cleaned
+        state["profile"][field_key] = cleaned_answer
         state["last_field"] = field_key
-        state["messages"].append(SystemMessage(
-            content=f"Observation: stored '{field_key}' = '{cleaned}'."
-        ))
         return state
 
-    # Unknown tool — ignore safely
-    state["messages"].append(SystemMessage(content=f"Observation: unknown tool '{tool_name}'."))
     return state
 
 # Planner (final meal plan generation)
 def planner_node(state: AgentState) -> AgentState:
     """Generate meal recommendations using collected profile."""
-    ans = state["profile"]
+    user_profile = state["profile"]
 
     # Coerce duration
     try:
-        duration = int(str(ans.get("plan_duration_days", "7")).strip() or 7)
+        duration = int(str(user_profile.get("plan_duration_days", "7")).strip())
     except ValueError:
         duration = 7
 
-    sys = (
+    system_text = (
         "You are a nutrition-aware meal planner. Create practical, culturally flexible, "
         "ingredient-level meal recommendations that are budget-conscious and easy to prepare. "
         "Keep portions reasonable and include brief justifications (protein/veg/carb). "
         "Respect dislikes and allergies strictly; never suggest allergen ingredients."
     )
-    def g(k: str) -> str:
-        return str(ans.get(k, "")).strip()
+    def get_field(k: str) -> str:
+        return str(user_profile.get(k, "")).strip()
 
-    user = f"""
-        Please generate a {duration}-day meal plan.
+    user_text = f"""
+        Generate a {duration}-day meal plan.
 
-        Recipient name: {g('name')}
-        Age: {g('age')} years
-        Height: {g('height_cm')} cm
-        Weight: {g('weight_kg')} kg
-        Likes: {g('liked_foods')}
-        Dislikes: {g('disliked_foods')}
-        Allergies: {g('allergies')}
-        Special needs: {g('special_needs')}
-        Usual meals/day: {g('meals_per_day')}
-        Target meals to plan: {g('meals_target')}
+        Recipient name: {get_field('name')}
+        Age: {get_field('age')} years
+        Height: {get_field('height_cm')} cm
+        Weight: {get_field('weight_kg')} kg
+        Likes: {get_field('liked_foods')}
+        Dislikes: {get_field('disliked_foods')}
+        Allergies: {get_field('allergies')}
+        Special needs: {get_field('special_needs')}
+        Meals to plan: {get_field('meals_to_plan')}
 
         Output format:
         - A short overview of goals/constraints.
@@ -322,8 +286,8 @@ def planner_node(state: AgentState) -> AgentState:
         """.strip()
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", sys),
-        ("human", user),
+        ("system", system_text),
+        ("human", user_text),
     ])
 
     result = (prompt | llm()).invoke({})
@@ -332,7 +296,7 @@ def planner_node(state: AgentState) -> AgentState:
     rprint(result.content)
 
     rprint("\n[dim]— — — — — — — — — — — — — — — —[/dim]")
-    pretty_answers(ans)
+    pretty_answers(user_profile)
 
     return state
 
@@ -342,8 +306,7 @@ def route_from_agent(state: AgentState) -> str:
     last = next((m for m in reversed(state["messages"]) if isinstance(m, AIMessage)), None)
     if last and getattr(last, "tool_calls", None):
         return "tools"
-    # Agent must always use tools; if it returned plain text, we'll loop and try again.
-    return "agent"
+    raise RuntimeError("Agent failed to invoke a tool despite tool_choice='required'.")
 
 def route_from_reduce(state: AgentState) -> str:
     return "plan" if state.get("done") else "agent"
@@ -352,12 +315,12 @@ def route_from_reduce(state: AgentState) -> str:
 def build_graph():
     g = StateGraph(AgentState)
     g.add_node("agent", agent_node)
-    g.add_node("tools", TOOLS_NODE)
+    g.add_node("tools", tools_node)
     g.add_node("reduce", reduce_node)
     g.add_node("plan", planner_node)
 
     g.set_entry_point("agent")
-    g.add_conditional_edges("agent", route_from_agent, {"tools": "tools", "agent": "agent"})
+    g.add_conditional_edges("agent", route_from_agent, ["tools"])
     g.add_edge("tools", "reduce")
     g.add_conditional_edges("reduce", route_from_reduce, {"agent": "agent", "plan": "plan"})
     g.add_edge("plan", END)
@@ -367,41 +330,27 @@ def build_graph():
 def main():
     load_dotenv()
 
-    # Initial conversation seed: instruct the agent explicitly.
-    seed_system = SystemMessage(content=(
-        "You will gather the user's dietary profile to create a meal plan. "
-        "At each step, choose ONE missing field and call ask_user(field_key, question). "
-        "After all fields are filled, call finish()."
-    ))
+    if not os.getenv("OPENAI_API_KEY"):
+        rprint("[bold red]Error: OPENAI_API_KEY environment variable is not set.[/bold red]")
+        return
 
     state: AgentState = {
-        "messages": [seed_system],
-        "profile": {k: "" for k in FIELD_ORDER},  # start empty; agent fills
+        "messages": [],
+        "profile": {k: "" for k in REQUIRED_FIELDS},
         "done": False,
         "last_field": None,
-        "stage": "agent",
     }
 
     app = build_graph()
     graph = app.get_graph()
-    png_bytes = draw_mermaid_png(graph.draw_mermaid())
+    png_bytes = graph.draw_mermaid_png()
     with open("agent_flow.png", "wb") as f:
         f.write(png_bytes)
-        rprint("[bold]Welcome to the Agentic Meal Planner![/bold]")
-        rprint("I'll ask a few questions (in any order) to personalize your plan.")
+        
+    rprint("[bold]Welcome to the Agentic Meal Planner![/bold]")
+    rprint("I'll ask a few questions (in any order) to personalize your plan.")
 
-    # Let the graph iterate until it reaches END
-    while True:
-        state = app.invoke(state, config={"recursion_limit": 1000})
-        # We rely on the graph's END after planner_node runs.
-        # To avoid an infinite loop if the agent refuses to use tools,
-        # break if messages grow too large without progress.
-        if state.get("done"):
-            # Planner node will be triggered by routing; continue until END.
-            pass
-        # END is handled inside the graph; the loop exits when invoke stops making progress.
-        if not any(isinstance(m, AIMessage) for m in state["messages"][-3:]) and state.get("done"):
-            break
+    state = app.invoke(state, config={"recursion_limit": 100})
 
     rprint("\n[bold]All set. Goodbye![/bold]")
 
