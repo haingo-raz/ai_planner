@@ -1,35 +1,30 @@
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 *.so
-*.egg
 *.egg-info/
-.eggs/
+build/
+dist/
 
 # Virtual environments
 .venv/
 venv/
-ENV/
 
 # Environment / secrets
 .env
 
-# Build / packaging
-build/
-dist/
-*.manifest
-*.spec
+# Local databases
+*.db
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # Logs
 *.log
 
-# Editors / IDE
+# Editors / OS
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS files
 .DS_Store
-Thumbs.db

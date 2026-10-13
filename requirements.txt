@@ -1,7 +1,0 @@
-python-dotenv>=1.0.1
-rich>=13.7.1
-
-# LangChain & ecosystem
-langchain>=1.4.2
-langgraph>=1.2.11
-langchain-openai>=1.6.
