@@ -19,7 +19,10 @@ def main() -> None:
         days=3,
     )
     state: AgentState = {
-        "messages": [HumanMessage(content="I'm 30yo male, 175cm, 75kg, goal is maintain, no allergies, 3 meals/day, plan 3 days")],
+        "messages": [
+            HumanMessage(content="I'm 30yo male, 175cm, 75kg, goal is maintain, no allergies, 3 meals/day, plan 3 days"),
+            HumanMessage(content="looks good"),
+        ],
         "profile": None,
         "targets": None,
         "recipes": [],

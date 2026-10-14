@@ -16,9 +16,10 @@ class Settings(BaseSettings):
     spoonacular_base_url: str = "https://api.spoonacular.com"
 
     # Observability
-    langchain_tracing_v2: bool = True
-    langchain_api_key: str = ""
-    langchain_project: str = "recipe-agent"
+    langsmith_tracing: bool = True
+    langsmith_api_key: str = ""
+    langsmith_project: str = "recipe-agent"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
 
     # App
     fastapi_host: str = "0.0.0.0"
@@ -29,3 +30,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+from src.tracing import configure_tracing
+
+configure_tracing(settings)

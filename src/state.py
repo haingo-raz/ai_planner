@@ -45,6 +45,7 @@ class WeeklyPlan:
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     profile: UserProfile | None
+    profile_id: int | None
     targets: NutritionTargets | None
     recipes: list[Recipe]
     plan: WeeklyPlan | None

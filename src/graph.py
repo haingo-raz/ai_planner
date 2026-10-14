@@ -6,17 +6,14 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from src.nodes.orchestrator import TOOLS, orchestrator_node
+from src.nodes.parse_tool_results import parse_tool_results_node
+from src.nodes.persist import persist_node
 from src.nodes.refine import refine_node
 from src.state import AgentState
 
 
 def intake_node(state: AgentState) -> AgentState:
     """Placeholder. Will collect/validate the user profile."""
-    return state
-
-
-def persist_node(state: AgentState) -> AgentState:
-    """Placeholder. Will save the profile and plan to SQLite."""
     return state
 
 
@@ -56,6 +53,7 @@ def build_graph() -> CompiledStateGraph:
     graph.add_node("intake", intake_node)
     graph.add_node("orchestrator", orchestrator_node)
     graph.add_node("tools", ToolNode(TOOLS))
+    graph.add_node("parse_tool_results", parse_tool_results_node)
     graph.add_node("refine", refine_node)
     graph.add_node("persist", persist_node)
 
@@ -65,7 +63,8 @@ def build_graph() -> CompiledStateGraph:
         route_from_orchestrator,
         {"tools": "tools", "refine": "refine", "orchestrator": "orchestrator", END: END},
     )
-    graph.add_edge("tools", "orchestrator")
+    graph.add_edge("tools", "parse_tool_results")
+    graph.add_edge("parse_tool_results", "orchestrator")
     graph.add_conditional_edges(
         "refine",
         route_from_refine,

@@ -7,9 +7,12 @@ from langchain_openai import ChatOpenAI
 
 from src.config import settings
 from src.state import AgentState
-from src.tools.nutrition import calculate_targets
-from src.tools.planner import build_plan
-from src.tools.recipes import filter_recipes, search_recipes
+from src.tools.agent_tools import (
+    build_plan,
+    calculate_targets,
+    filter_recipes,
+    search_recipes,
+)
 
 _PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "orchestrator.md"
 SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
