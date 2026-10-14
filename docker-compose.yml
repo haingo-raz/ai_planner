@@ -1,0 +1,16 @@
+services:
+  backend:
+    build: .
+    ports: ["8000:8000"]
+    env_file: .env
+    volumes: ["./recipe_agent.db:/app/recipe_agent.db"]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports: ["8501:8501"]
+    depends_on: [backend]
+    env_file: .env
+    environment:
+      API_BASE_URL: http://backend:8000

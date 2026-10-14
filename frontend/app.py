@@ -1,11 +1,13 @@
 """Streamlit UI for the recipe agent."""
 
+import os
+
 import httpx
 import streamlit as st
 
-from src.config import settings
-
-API_BASE = settings.api_base_url
+API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
+PLAN_REQUEST_TIMEOUT = float(os.environ.get("PLAN_REQUEST_TIMEOUT", "120.0"))
+REFINE_REQUEST_TIMEOUT = float(os.environ.get("REFINE_REQUEST_TIMEOUT", "60.0"))
 
 
 def _parse_csv(raw: str) -> list[str]:
@@ -49,7 +51,7 @@ def _request_plan(payload: dict) -> None:
     with st.spinner("Finding recipes..."):
         try:
             response = httpx.post(
-                f"{API_BASE}/plan", json=payload, timeout=settings.plan_request_timeout
+                f"{API_BASE}/plan", json=payload, timeout=PLAN_REQUEST_TIMEOUT
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -121,7 +123,7 @@ def _render_followup() -> None:
                     "profile_id": profile_id,
                     "messages": st.session_state.get("messages", []),
                 },
-                timeout=settings.refine_request_timeout,
+                timeout=REFINE_REQUEST_TIMEOUT,
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
