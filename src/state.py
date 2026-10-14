@@ -1,10 +1,10 @@
 """Domain types and the LangGraph agent state."""
 
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TypedDict, Annotated
 
 from langchain_core.messages import BaseMessage
-
+from langgraph.graph.message import add_messages
 
 @dataclass
 class UserProfile:
@@ -43,7 +43,7 @@ class WeeklyPlan:
 
 
 class AgentState(TypedDict):
-    messages: list[BaseMessage]
+    messages: Annotated[list[BaseMessage], add_messages]
     profile: UserProfile | None
     targets: NutritionTargets | None
     recipes: list[Recipe]
