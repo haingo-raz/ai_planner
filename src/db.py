@@ -8,7 +8,7 @@ from sqlalchemy import Engine
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from src.config import settings
-from src.state import Recipe, UserProfile, WeeklyPlan
+from src.state import NutritionTargets, Recipe, UserProfile, WeeklyPlan
 
 
 class UserProfileRecord(SQLModel, table=True):
@@ -29,6 +29,7 @@ class PlanRecord(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     profile_id: int = Field(foreign_key="userprofilerecord.id")
     plan_json: str  # full WeeklyPlan serialised as JSON
+    targets_json: str  # NutritionTargets serialised as JSON
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -70,6 +71,16 @@ def _plan_from_json(plan_json: str) -> WeeklyPlan:
     return WeeklyPlan(days=days)
 
 
+def _targets_to_json(targets: NutritionTargets) -> str:
+    """Serialise NutritionTargets to a JSON string."""
+    return json.dumps(asdict(targets))
+
+
+def _targets_from_json(targets_json: str) -> NutritionTargets:
+    """Rebuild a NutritionTargets dataclass instance from JSON."""
+    return NutritionTargets(**json.loads(targets_json))
+
+
 def save_profile(profile: UserProfile) -> int:
     """Persist a user profile and return the new record id."""
     record = UserProfileRecord(
@@ -109,9 +120,13 @@ def load_profile(profile_id: int) -> UserProfile | None:
         )
 
 
-def save_plan(profile_id: int, plan: WeeklyPlan) -> int:
-    """Persist a weekly plan for a profile and return the new record id."""
-    record = PlanRecord(profile_id=profile_id, plan_json=_plan_to_json(plan))
+def save_plan(profile_id: int, plan: WeeklyPlan, targets: NutritionTargets) -> int:
+    """Persist a weekly plan and its targets for a profile; return the new record id."""
+    record = PlanRecord(
+        profile_id=profile_id,
+        plan_json=_plan_to_json(plan),
+        targets_json=_targets_to_json(targets),
+    )
     with Session(get_engine()) as session:
         session.add(record)
         session.commit()
@@ -119,8 +134,8 @@ def save_plan(profile_id: int, plan: WeeklyPlan) -> int:
         return record.id
 
 
-def load_plan(profile_id: int) -> WeeklyPlan | None:
-    """Load the most recent plan for a profile, or None if none exists."""
+def load_plan(profile_id: int) -> tuple[WeeklyPlan, NutritionTargets] | None:
+    """Load the most recent plan and targets for a profile, or None if none exists."""
     with Session(get_engine()) as session:
         statement = (
             select(PlanRecord)
@@ -130,4 +145,4 @@ def load_plan(profile_id: int) -> WeeklyPlan | None:
         record = session.exec(statement).first()
         if record is None:
             return None
-        return _plan_from_json(record.plan_json)
+        return _plan_from_json(record.plan_json), _targets_from_json(record.targets_json)

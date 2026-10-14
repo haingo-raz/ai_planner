@@ -37,7 +37,7 @@ def search_recipes(
             "addRecipeInformation": "true",
             "apiKey": settings.spoonacular_api_key,
         },
-        timeout=10.0,
+        timeout=settings.spoonacular_timeout,
     )
     if response.status_code != 200:
         raise ValueError(

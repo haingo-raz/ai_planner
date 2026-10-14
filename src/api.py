@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException
+from langchain_core.messages import AIMessage, HumanMessage, messages_from_dict, messages_to_dict
 from pydantic import BaseModel, Field
 
 from src.config import settings
-from src.db import load_plan
+from src.db import load_plan, load_profile
 from src.graph import build_graph
 from src.state import AgentState, UserProfile, WeeklyPlan
 
@@ -39,10 +40,14 @@ class PlanResponse(BaseModel):
     days: dict[str, DayResponse]
     targets: dict
     profile_id: int | None = None
+    messages: list[dict] = Field(default_factory=list)
 
 
 def _plan_to_response(
-    plan: WeeklyPlan, targets: dict, profile_id: int | None = None
+    plan: WeeklyPlan,
+    targets: dict,
+    profile_id: int | None = None,
+    messages: list[dict] | None = None,
 ) -> PlanResponse:
     """Map the domain WeeklyPlan onto the HTTP response model."""
     return PlanResponse(
@@ -57,6 +62,7 @@ def _plan_to_response(
         },
         targets=targets,
         profile_id=profile_id,
+        messages=messages or [],
     )
 
 
@@ -101,15 +107,81 @@ def create_plan(request: PlanRequest) -> PlanResponse:
         raise HTTPException(status_code=500, detail="failed to generate plan")
 
     targets = asdict(result["targets"]) if result.get("targets") is not None else {}
-    return _plan_to_response(plan, targets, result.get("profile_id"))
+    messages = messages_to_dict(result.get("messages") or [])
+    return _plan_to_response(plan, targets, result.get("profile_id"), messages)
 
 
 @app.get("/plan/{profile_id}", response_model=PlanResponse)
 def get_plan(profile_id: int) -> PlanResponse:
-    plan = load_plan(profile_id)
-    if plan is None:
+    loaded = load_plan(profile_id)
+    if loaded is None:
         raise HTTPException(status_code=404, detail="plan not found")
-    return _plan_to_response(plan, {})
+    plan, targets = loaded
+    return _plan_to_response(plan, asdict(targets), profile_id)
+
+
+class RefineRequest(BaseModel):
+    message: str
+    profile_id: int
+    messages: list[dict] = Field(default_factory=list)
+
+
+class RefineResponse(BaseModel):
+    message: str
+    plan: PlanResponse
+    messages: list[dict]
+    done: bool
+
+
+def _last_ai_text(messages: list) -> str:
+    for message in reversed(messages):
+        if isinstance(message, AIMessage):
+            return str(message.content)
+    return ""
+
+
+@app.post("/refine", response_model=RefineResponse)
+def refine(request: RefineRequest) -> RefineResponse:
+    profile = load_profile(request.profile_id)
+    loaded = load_plan(request.profile_id)
+    if profile is None or loaded is None:
+        raise HTTPException(status_code=404, detail="profile or plan not found")
+
+    plan, targets = loaded
+
+    history = messages_from_dict(request.messages)
+    history.append(HumanMessage(content=request.message))
+
+    initial_state: AgentState = {
+        "messages": history,
+        "profile": profile,
+        "profile_id": request.profile_id,
+        "targets": targets,
+        "recipes": [],
+        "plan": plan,
+        "error": None,
+        "done": False,
+        "mode": "chat",
+    }
+
+    result = app.state.graph.invoke(
+        initial_state,
+        config={"recursion_limit": settings.recursion_limit},
+    )
+
+    updated_plan = result.get("plan") or plan
+    result_targets = asdict(result["targets"]) if result.get("targets") is not None else {}
+    out_messages = messages_to_dict(result.get("messages") or [])
+
+    persisted = result.get("profile_id") != request.profile_id
+    done = bool(result.get("done")) or persisted
+
+    return RefineResponse(
+        message=_last_ai_text(result.get("messages") or []),
+        plan=_plan_to_response(updated_plan, result_targets, request.profile_id),
+        messages=out_messages,
+        done=done,
+    )
 
 
 def main() -> None:

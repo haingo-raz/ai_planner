@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # Recipe API
     spoonacular_api_key: str
     spoonacular_base_url: str = "https://api.spoonacular.com"
+    spoonacular_timeout: float = 10.0
 
     # Observability
     langsmith_tracing: bool = True
@@ -27,6 +28,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./recipe_agent.db"
     recursion_limit: int = 50
     default_plan_days: int = 7
+
+    # Frontend
+    api_base_url: str = "http://localhost:8000"
+    plan_request_timeout: float = 120.0
+    refine_request_timeout: float = 60.0
 
 
 settings = Settings()

@@ -24,10 +24,30 @@ def _last_ai_has_tool_calls(state: AgentState) -> bool:
     return False
 
 
+def _last_human_approves(state: AgentState) -> bool:
+    for message in reversed(state["messages"]):
+        if isinstance(message, HumanMessage):
+            text = str(message.content).lower()
+            return any(
+                phrase in text
+                for phrase in [
+                    "done",
+                    "looks good",
+                    "perfect",
+                    "that works",
+                    "save it",
+                    "save the plan",
+                ]
+            )
+    return False
+
+
 def route_from_orchestrator(state: AgentState) -> str:
     """Decide where to go after the orchestrator runs."""
     if _last_ai_has_tool_calls(state):
         return "tools"
+    if state.get("mode") == "chat" and _last_human_approves(state):
+        return "persist"
     if state.get("done"):
         if state.get("mode") == "api":
             return "persist"
@@ -39,12 +59,8 @@ def route_from_orchestrator(state: AgentState) -> str:
 
 def route_from_refine(state: AgentState) -> str:
     """After refine, persist if the user is satisfied, else keep refining."""
-    for message in reversed(state["messages"]):
-        if isinstance(message, HumanMessage):
-            text = str(message.content).lower()
-            if "done" in text or "looks good" in text:
-                return "persist"
-            break
+    if _last_human_approves(state):
+        return "persist"
     return "orchestrator"
 
 

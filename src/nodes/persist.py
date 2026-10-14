@@ -9,7 +9,11 @@ def persist_node(state: AgentState) -> AgentState:
     if state.get("profile") is not None:
         state["profile_id"] = save_profile(state["profile"])
 
-    if state.get("plan") is not None and state.get("profile_id") is not None:
-        save_plan(state["profile_id"], state["plan"])
+    if (
+        state.get("plan") is not None
+        and state.get("profile_id") is not None
+        and state.get("targets") is not None
+    ):
+        save_plan(state["profile_id"], state["plan"], state["targets"])
 
     return state
