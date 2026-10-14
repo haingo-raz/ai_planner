@@ -29,6 +29,7 @@ def main() -> None:
         "plan": None,
         "error": None,
         "done": False,
+        "mode": "chat",
     }
 
     app = build_graph()

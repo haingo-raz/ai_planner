@@ -29,6 +29,8 @@ def route_from_orchestrator(state: AgentState) -> str:
     if _last_ai_has_tool_calls(state):
         return "tools"
     if state.get("done"):
+        if state.get("mode") == "api":
+            return "persist"
         return "refine"
     if state.get("error") is not None:
         return "orchestrator"
@@ -61,7 +63,13 @@ def build_graph() -> CompiledStateGraph:
     graph.add_conditional_edges(
         "orchestrator",
         route_from_orchestrator,
-        {"tools": "tools", "refine": "refine", "orchestrator": "orchestrator", END: END},
+        {
+            "tools": "tools",
+            "refine": "refine",
+            "persist": "persist",
+            "orchestrator": "orchestrator",
+            END: END,
+        },
     )
     graph.add_edge("tools", "parse_tool_results")
     graph.add_edge("parse_tool_results", "orchestrator")

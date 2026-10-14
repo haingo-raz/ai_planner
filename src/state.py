@@ -51,3 +51,4 @@ class AgentState(TypedDict):
     plan: WeeklyPlan | None
     error: str | None
     done: bool
+    mode: str  # "api" or "chat"
