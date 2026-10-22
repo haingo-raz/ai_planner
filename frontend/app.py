@@ -5,9 +5,20 @@ import os
 import httpx
 import streamlit as st
 
-API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
-PLAN_REQUEST_TIMEOUT = float(os.environ.get("PLAN_REQUEST_TIMEOUT", "120.0"))
-REFINE_REQUEST_TIMEOUT = float(os.environ.get("REFINE_REQUEST_TIMEOUT", "60.0"))
+
+def _get_config(key: str, default: str) -> str:
+    """Resolve configs"""
+    try:
+        if key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return os.environ.get(key, default)
+
+
+API_BASE = _get_config("API_BASE_URL", "http://localhost:8000").rstrip("/")
+PLAN_REQUEST_TIMEOUT = float(_get_config("PLAN_REQUEST_TIMEOUT", "120.0"))
+REFINE_REQUEST_TIMEOUT = float(_get_config("REFINE_REQUEST_TIMEOUT", "60.0"))
 
 
 def _parse_csv(raw: str) -> list[str]:
@@ -18,6 +29,17 @@ def _parse_csv(raw: str) -> list[str]:
 def _render_sidebar() -> dict | None:
     """Render the profile form; return the request payload on submit, else None."""
     st.sidebar.title("Your Profile")
+
+    api_key = st.sidebar.text_input(
+        "OpenAI API key",
+        type="password",
+        key="openai_api_key",
+        help=(
+            "Required. Used only for this session to generate your plan and "
+            "never stored on the server."
+        ),
+    )
+
     with st.sidebar.form("profile_form"):
         age = st.number_input("Age", min_value=1, max_value=120, value=30, step=1)
         height_cm = st.number_input("Height (cm)", min_value=50, max_value=250, value=175, step=1)
@@ -33,6 +55,10 @@ def _render_sidebar() -> dict | None:
     if not submitted:
         return None
 
+    if not api_key.strip():
+        st.sidebar.error("Please enter your OpenAI API key to build a plan.")
+        return None
+
     return {
         "age": int(age),
         "height_cm": int(height_cm),
@@ -43,6 +69,7 @@ def _render_sidebar() -> dict | None:
         "days": int(days),
         "allergies": _parse_csv(allergies),
         "dislikes": _parse_csv(dislikes),
+        "openai_api_key": api_key.strip(),
     }
 
 
@@ -113,8 +140,12 @@ def _render_followup() -> None:
         st.info("This plan has no saved profile yet, so follow-ups are unavailable.")
         return
 
+    api_key = st.session_state.get("openai_api_key", "").strip()
     user_input = st.text_input("Ask a follow-up...")
     if st.button("Send") and user_input:
+        if not api_key:
+            st.error("Please enter your OpenAI API key in the sidebar to continue.")
+            return
         try:
             response = httpx.post(
                 f"{API_BASE}/refine",
@@ -122,6 +153,7 @@ def _render_followup() -> None:
                     "message": user_input,
                     "profile_id": profile_id,
                     "messages": st.session_state.get("messages", []),
+                    "openai_api_key": api_key,
                 },
                 timeout=REFINE_REQUEST_TIMEOUT,
             )

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from langchain_core.messages import SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 
 from src.config import settings
@@ -19,15 +20,18 @@ SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 TOOLS = [calculate_targets, search_recipes, filter_recipes, build_plan]
 
-_llm = ChatOpenAI(
-    model=settings.model_name,
-    temperature=settings.model_temperature,
-    api_key=settings.openai_api_key,
-).bind_tools(TOOLS, tool_choice="auto")
+def build_llm(api_key: str | None = None) -> Runnable:
+    """Build the tool-bound chat model, using the given key or the configured default."""
+    return ChatOpenAI(
+        model=settings.model_name,
+        temperature=settings.model_temperature,
+        api_key=api_key or settings.openai_api_key,
+    ).bind_tools(TOOLS, tool_choice="auto")
 
 
 def orchestrator_node(state: AgentState) -> AgentState:
     """Run one orchestrator step and append the AI response to the state."""
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
-    response = _llm.invoke(messages)
+    llm = build_llm(state.get("openai_api_key"))
+    response = llm.invoke(messages)
     return {"messages": [response]}

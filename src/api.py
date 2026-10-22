@@ -24,6 +24,7 @@ class PlanRequest(BaseModel):
     dislikes: list[str] = Field(default_factory=list)
     meals_per_day: int = 3
     days: int = 7
+    openai_api_key: str | None = None
 
 
 class MealResponse(BaseModel):
@@ -83,7 +84,7 @@ def health() -> dict:
 
 @app.post("/plan", response_model=PlanResponse)
 def create_plan(request: PlanRequest) -> PlanResponse:
-    profile = UserProfile(**request.model_dump())
+    profile = UserProfile(**request.model_dump(exclude={"openai_api_key"}))
 
     initial_state: AgentState = {
         "messages": [],
@@ -95,6 +96,7 @@ def create_plan(request: PlanRequest) -> PlanResponse:
         "error": None,
         "done": False,
         "mode": "api",
+        "openai_api_key": request.openai_api_key,
     }
 
     result = app.state.graph.invoke(
@@ -124,6 +126,7 @@ class RefineRequest(BaseModel):
     message: str
     profile_id: int
     messages: list[dict] = Field(default_factory=list)
+    openai_api_key: str | None = None
 
 
 class RefineResponse(BaseModel):
@@ -162,6 +165,7 @@ def refine(request: RefineRequest) -> RefineResponse:
         "error": None,
         "done": False,
         "mode": "chat",
+        "openai_api_key": request.openai_api_key,
     }
 
     result = app.state.graph.invoke(

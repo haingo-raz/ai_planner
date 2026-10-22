@@ -53,3 +53,4 @@ class AgentState(TypedDict):
     error: str | None
     done: bool
     mode: str  # "api" or "chat"
+    openai_api_key: str | None

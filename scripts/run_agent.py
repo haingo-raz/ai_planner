@@ -23,6 +23,7 @@ def main() -> None:
         "error": None,
         "done": False,
         "mode": "chat",
+        "openai_api_key": None,
     }
 
     app = build_graph()
