@@ -96,12 +96,14 @@ def create_plan(request: PlanRequest) -> PlanResponse:
         "error": None,
         "done": False,
         "mode": "api",
-        "openai_api_key": request.openai_api_key,
     }
 
     result = app.state.graph.invoke(
         initial_state,
-        config={"recursion_limit": settings.recursion_limit},
+        config={
+            "recursion_limit": settings.recursion_limit,
+            "configurable": {"openai_api_key": request.openai_api_key},
+        },
     )
 
     plan = result.get("plan")
@@ -165,12 +167,14 @@ def refine(request: RefineRequest) -> RefineResponse:
         "error": None,
         "done": False,
         "mode": "chat",
-        "openai_api_key": request.openai_api_key,
     }
 
     result = app.state.graph.invoke(
         initial_state,
-        config={"recursion_limit": settings.recursion_limit},
+        config={
+            "recursion_limit": settings.recursion_limit,
+            "configurable": {"openai_api_key": request.openai_api_key},
+        },
     )
 
     updated_plan = result.get("plan") or plan

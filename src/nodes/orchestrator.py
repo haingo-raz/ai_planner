@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from langchain_core.messages import SystemMessage
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_openai import ChatOpenAI
 
 from src.config import settings
@@ -29,9 +29,15 @@ def build_llm(api_key: str | None = None) -> Runnable:
     ).bind_tools(TOOLS, tool_choice="auto")
 
 
-def orchestrator_node(state: AgentState) -> AgentState:
+def _api_key_from_config(config: RunnableConfig | None) -> str | None:
+    if not config:
+        return None
+    return (config.get("configurable") or {}).get("openai_api_key")
+
+
+def orchestrator_node(state: AgentState, config: RunnableConfig | None = None) -> AgentState:
     """Run one orchestrator step and append the AI response to the state."""
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
-    llm = build_llm(state.get("openai_api_key"))
+    llm = build_llm(_api_key_from_config(config))
     response = llm.invoke(messages)
     return {"messages": [response]}
