@@ -25,6 +25,16 @@ uvicorn src.api:app --reload          # terminal 1 — backend on :8000
 streamlit run frontend/app.py         # terminal 2 — UI on :8501
 ```
 
+## Tests
+
+The dev dependencies include the test tooling, and the suite runs offline: `tests/conftest.py`
+sets dummy API keys.
+
+```bash
+pip install -e ".[dev]"   # if not already installed
+pytest
+```
+
 ## Environment variables
 
 | Variable | Description | Required |
