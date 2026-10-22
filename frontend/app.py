@@ -182,6 +182,23 @@ def main() -> None:
 
     _render_plan()
     _render_followup()
+    _render_footer()
+
+
+def _render_footer() -> None:
+    """Render a trust-building footer with author and source links."""
+    st.divider()
+    st.markdown(
+        '<div style="text-align: center; color: gray;">'
+        'Created with ❤️ by '
+        '<a href="https://github.com/haingo-raz" target="_blank" '
+        'rel="noopener noreferrer">haingo-raz</a>'
+        ' · Codebase available on '
+        '<a href="https://github.com/haingo-raz/ai_planner/" target="_blank" '
+        'rel="noopener noreferrer">GitHub</a>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
