@@ -1,10 +1,11 @@
 """Domain types and the LangGraph agent state."""
 
 from dataclasses import dataclass
-from typing import TypedDict, Annotated
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
+
 
 @dataclass
 class UserProfile:

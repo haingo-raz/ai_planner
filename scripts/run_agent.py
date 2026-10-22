@@ -1,26 +1,19 @@
 """Smoke-test driver: build the graph and run it against a hardcoded profile."""
 
+from langchain_core.messages import HumanMessage
+
 from src.config import settings
 from src.graph import build_graph
-from src.state import AgentState, UserProfile
-from langchain_core.messages import HumanMessage
+from src.state import AgentState
 
 
 def main() -> None:
-    profile = UserProfile(
-        age=30,
-        height_cm=175,
-        weight_kg=75,
-        sex="male",
-        goal="maintain",
-        allergies=[],
-        dislikes=[],
-        meals_per_day=3,
-        days=3,
-    )
     state: AgentState = {
         "messages": [
-            HumanMessage(content="I'm 30yo male, 175cm, 75kg, goal is maintain, no allergies, 3 meals/day, plan 3 days"),
+            HumanMessage(
+                content="I'm 30yo male, 175cm, 75kg, goal is maintain, "
+                "no allergies, 3 meals/day, plan 3 days"
+            ),
             HumanMessage(content="looks good"),
         ],
         "profile": None,

@@ -2,6 +2,8 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.tracing import configure_tracing
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
@@ -36,7 +38,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-from src.tracing import configure_tracing
 
 configure_tracing(settings)
