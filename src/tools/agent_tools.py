@@ -2,10 +2,12 @@
 
 import json
 from dataclasses import asdict
+from typing import Annotated
 
 from langchain_core.tools import tool
+from langgraph.prebuilt import InjectedState
 
-from src.state import NutritionTargets, Recipe, UserProfile, WeeklyPlan
+from src.state import NutritionTargets, Recipe, WeeklyPlan
 from src.tools.nutrition import calculate_targets as _calculate_targets
 from src.tools.planner import build_plan as _build_plan
 from src.tools.recipes import filter_recipes as _filter_recipes
@@ -13,12 +15,16 @@ from src.tools.recipes import search_recipes as _search_recipes
 
 
 @tool("calculate_targets", response_format="content_and_artifact")
-def calculate_targets(profile: UserProfile) -> tuple[str, NutritionTargets]:
+def calculate_targets(
+    state: Annotated[dict, InjectedState],
+) -> tuple[str, NutritionTargets]:
     """Compute daily calorie and macro targets from the user's profile.
 
-    Call this first, always. Pass the returned ``calories`` as ``max_calories``
-    to ``search_recipes``.
+    Call this first, always. Takes no arguments; it reads the trusted profile
+    from agent state. Pass the returned ``calories`` as ``max_calories`` to
+    ``search_recipes``.
     """
+    profile = state["profile"]
     targets = _calculate_targets(profile)
     return json.dumps(asdict(targets)), targets
 

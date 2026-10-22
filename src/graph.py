@@ -9,12 +9,29 @@ from src.nodes.orchestrator import TOOLS, orchestrator_node
 from src.nodes.parse_tool_results import parse_tool_results_node
 from src.nodes.persist import persist_node
 from src.nodes.refine import refine_node
-from src.state import AgentState
+from src.state import AgentState, UserProfile
+
+
+def _profile_to_message(profile: UserProfile) -> HumanMessage:
+    """Render the structured profile as a message the orchestrator LLM can read."""
+    allergies = ", ".join(profile.allergies) if profile.allergies else "none"
+    dislikes = ", ".join(profile.dislikes) if profile.dislikes else "none"
+    content = (
+        f"My profile: {profile.age} years old, {profile.sex}, "
+        f"{profile.height_cm} cm, {profile.weight_kg} kg. "
+        f"Goal: {profile.goal}. Allergies: {allergies}. Dislikes: {dislikes}. "
+        f"Please build me a {profile.days}-day plan with "
+        f"{profile.meals_per_day} meal(s) per day."
+    )
+    return HumanMessage(content=content)
 
 
 def intake_node(state: AgentState) -> AgentState:
-    """Placeholder. Will collect/validate the user profile."""
-    return state
+    """Surface the structured profile to the LLM as a HumanMessage, once per run."""
+    profile = state.get("profile")
+    if profile is None or state.get("messages"):
+        return state
+    return {"messages": [_profile_to_message(profile)]}
 
 
 def _last_ai_has_tool_calls(state: AgentState) -> bool:
@@ -75,7 +92,8 @@ def build_graph() -> CompiledStateGraph:
     graph.add_node("refine", refine_node)
     graph.add_node("persist", persist_node)
 
-    graph.add_edge(START, "orchestrator")
+    graph.add_edge(START, "intake")
+    graph.add_edge("intake", "orchestrator")
     graph.add_conditional_edges(
         "orchestrator",
         route_from_orchestrator,

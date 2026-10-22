@@ -108,7 +108,7 @@ def _render_plan() -> None:
     targets = plan.get("targets") or {}
     if targets:
         st.caption(
-            f"Daily targets — {targets.get('calories', '?')} kcal · "
+            f"Daily targets: {targets.get('calories', '?')} kcal · "
             f"{targets.get('protein_g', '?')}g protein · "
             f"{targets.get('carbs_g', '?')}g carbs · "
             f"{targets.get('fat_g', '?')}g fat"
