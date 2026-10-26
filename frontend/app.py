@@ -5,6 +5,8 @@ import os
 import httpx
 import streamlit as st
 
+from utils.pdf import generate_plan_pdf
+
 
 def _get_config(key: str, default: str) -> str:
     """Resolve configs"""
@@ -170,20 +172,30 @@ def _render_followup() -> None:
             st.session_state["plan_done"] = True
             st.rerun()
 
+def _render_action_buttons() -> None:
+    """Display a PDF download button when a meal plan exists."""
+    plan = st.session_state.get("plan")
 
-def main() -> None:
-    """Render the Streamlit app."""
-    st.set_page_config(page_title="Recipe Discovery Agent", page_icon="🥗")
-    st.title("Recipe Discovery Agent")
+    if plan is None:
+        return
 
-    payload = _render_sidebar()
-    if payload is not None:
-        _request_plan(payload)
+    try:
+        pdf_bytes = generate_plan_pdf(plan)
+    except (ValueError, TypeError) as exc:
+        st.error(f"Could not generate PDF: {exc}")
+        return
 
-    _render_plan()
-    _render_followup()
-    _render_footer()
-
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        st.download_button(
+            label="Download as PDF",
+            type="primary",
+            data=pdf_bytes,
+            file_name="meal_plan.pdf",
+            mime="application/pdf",
+            icon=":material/download:",
+            on_click="ignore",
+            width="content",
+        )
 
 def _render_footer() -> None:
     """Render a trust-building footer with author and source links."""
@@ -199,6 +211,20 @@ def _render_footer() -> None:
         '</div>',
         unsafe_allow_html=True,
     )
+
+def main() -> None:
+    """Render the Streamlit app."""
+    st.set_page_config(page_title="Recipe Discovery App", page_icon="🥗")
+    st.title("Recipe Discovery App")
+
+    payload = _render_sidebar()
+    if payload is not None:
+        _request_plan(payload)
+
+    _render_plan()
+    # _render_followup() temporarily disabled
+    _render_action_buttons()
+    _render_footer()
 
 
 if __name__ == "__main__":

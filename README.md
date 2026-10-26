@@ -17,12 +17,35 @@ retrieved or refined later.
 
 ## Local setup (without Docker)
 
+Create and activate a virtual environment from the repository root.
+
 ```bash
-python -m venv .venv && source .venv/bin/activate # .venv\Scripts\activate on Windows
+python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+```
+
+Install backend dependencies, including backend development tools, and frontend dependencies, including frontend test tools.
+
+```bash
 pip install -e ".[dev]"
-cp .env.example .env   # fill in OPENAI_API_KEY and SPOONACULAR_API_KEY
-uvicorn src.api:app --reload          # terminal 1 — backend on :8000
-streamlit run frontend/app.py         # terminal 2 — UI on :8501
+pip install -r frontend/requirements-dev.txt
+```
+
+Copy `.env.example` to `.env` and fill in `OPENAI_API_KEY` and `SPOONACULAR_API_KEY`.
+
+Run the backend and frontend in separate terminals, with the virtual environment activated in each.
+
+```bash
+# Terminal 1: FastAPI backend
+uvicorn src.api:app --reload
+
+# Terminal 2: Streamlit frontend
+streamlit run frontend/app.py
 ```
 
 ## Tests
@@ -30,9 +53,17 @@ streamlit run frontend/app.py         # terminal 2 — UI on :8501
 The dev dependencies include the test tooling, and the suite runs offline: `tests/conftest.py`
 sets dummy API keys.
 
+Install the development dependencies first:
+
 ```bash
-pip install -e ".[dev]"   # if not already installed
-pytest
+pip install -e ".[dev]"
+pip install -r frontend/requirements-dev.txt
+```
+
+Run the test suite from the repository root:
+
+```bash
+python -m pytest
 ```
 
 ## Environment variables
@@ -72,54 +103,6 @@ pytest
 | Storage | SQLite (local) | Persist user profile + past plans; zero infra |
 | Config | pydantic-settings | Reads .env, validates types, no scattered os.getenv() calls |
 | Packaging | pyproject.toml | Modern Python packaging; replaces requirements.txt |
-
-### Folder structure
-
-```
-ai_planner/
-├── pyproject.toml                   # Modern Python packaging + dependencies (backend)
-├── README.md                        # This file
-├── .env.example                     # Template for required/optional env vars
-├── Dockerfile                       # Backend image (FastAPI/uvicorn)
-├── docker-compose.yml               # Runs backend (:8000) + frontend (:8501) together
-├── prompts/
-│   ├── orchestrator.md
-│   └── refine.md
-├── scripts/
-│   └── run_agent.py              # CLI smoke-test driver for the graph
-├── src/
-│   ├── __init__.py
-│   ├── config.py                 # Settings (pydantic-settings)
-│   ├── tracing.py                # LangSmith tracing configuration
-│   ├── state.py                  # AgentState + domain dataclasses
-│   ├── tools/
-│   │   ├── __init__.py
-│   │   ├── nutrition.py          # calculate_targets (BMR/TDEE)
-│   │   ├── recipes.py            # search_recipes, filter_recipes
-│   │   ├── planner.py            # build_plan
-│   │   └── agent_tools.py        # LangChain tool wrappers (content_and_artifact)
-│   ├── nodes/
-│   │   ├── __init__.py
-│   │   ├── orchestrator.py       # main LLM node
-│   │   ├── parse_tool_results.py # lift tool artifacts into AgentState
-│   │   ├── refine.py             # follow-up Q&A node
-│   │   └── persist.py            # save profile + plan to SQLite
-│   ├── graph.py                  # build_graph()
-│   ├── db.py                     # SQLite helpers (save/load profile + plan + targets)
-│   └── api.py                    # FastAPI app (/health, /plan, /plan/{id}, /refine)
-├── frontend/
-│   ├── __init__.py
-│   ├── app.py                    # Streamlit UI
-│   ├── Dockerfile                # Frontend image (Streamlit)
-│   └── requirements.txt          # Frontend-only deps (streamlit, httpx, pydantic-settings)
-└── tests/
-    ├── __init__.py
-    ├── conftest.py
-    ├── test_nutrition.py
-    ├── test_recipes.py
-    ├── test_planner.py
-    └── test_graph.py
-```
 
 ### Graph flow
 

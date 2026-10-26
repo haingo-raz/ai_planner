@@ -1,3 +1,4 @@
 streamlit==1.65.0
 httpx==0.28.1
 pydantic-settings==2.16.0
+reportlab>=4.0.0
