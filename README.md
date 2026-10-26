@@ -18,7 +18,7 @@ retrieved or refined later.
 ## Local setup (without Docker)
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 cp .env.example .env   # fill in OPENAI_API_KEY and SPOONACULAR_API_KEY
 uvicorn src.api:app --reload          # terminal 1 — backend on :8000
