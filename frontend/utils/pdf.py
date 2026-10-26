@@ -1,7 +1,7 @@
 """Create downloadable meal-plan PDFs from the Streamlit API response."""
 
-from io import BytesIO
 from html import escape
+from io import BytesIO
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 

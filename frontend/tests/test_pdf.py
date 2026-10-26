@@ -4,7 +4,6 @@ from io import BytesIO
 
 import pytest
 from pypdf import PdfReader
-
 from utils.pdf import generate_plan_pdf
 
 

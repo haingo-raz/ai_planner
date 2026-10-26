@@ -4,7 +4,6 @@ import os
 
 import httpx
 import streamlit as st
-
 from utils.pdf import generate_plan_pdf
 
 
