@@ -41,9 +41,9 @@ def _render_sidebar() -> dict | None:
     )
 
     with st.sidebar.form("profile_form"):
-        age = st.number_input("Age", min_value=1, max_value=120, value=30, step=1)
+        age = st.number_input("Age", min_value=18, max_value=120, value=30, step=1)
         height_cm = st.number_input("Height (cm)", min_value=50, max_value=250, value=175, step=1)
-        weight_kg = st.number_input("Weight (kg)", min_value=20, max_value=300, value=75, step=1)
+        weight_kg = st.number_input("Weight (kg)", min_value=35, max_value=300, value=75, step=1)
         sex = st.selectbox("Sex", ["male", "female"])
         goal = st.selectbox("Goal", ["lose", "maintain", "gain"], index=1)
         meals_per_day = st.number_input("Meals per day", min_value=1, max_value=4, value=3, step=1)
@@ -102,7 +102,7 @@ def _render_plan() -> None:
     """Render the cached plan, or a placeholder when there is none."""
     plan = st.session_state.get("plan")
     if plan is None:
-        st.info("Fill in your profile and click Build my plan")
+        st.info("Fill in your profile and click the \"Build my plan\" button.")
         return
 
     targets = plan.get("targets") or {}
