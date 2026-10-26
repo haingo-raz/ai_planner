@@ -77,6 +77,9 @@ def _render_sidebar() -> dict | None:
 
 def _request_plan(payload: dict) -> None:
     """POST the profile to the backend and cache the plan in session state."""
+    if st.session_state.get("plan_loading"):
+        return
+    st.session_state["plan_loading"] = True
     with st.spinner("Finding recipes..."):
         try:
             response = httpx.post(
@@ -95,9 +98,12 @@ def _request_plan(payload: dict) -> None:
             return
 
     data = response.json()
-    st.session_state["plan"] = data
-    st.session_state["messages"] = data.get("messages", [])
-    st.session_state["profile_id"] = data.get("profile_id")
+    try:
+        st.session_state["plan"] = data
+        st.session_state["messages"] = data.get("messages", [])
+        st.session_state["profile_id"] = data.get("profile_id")
+    finally:
+        st.session_state["plan_loading"] = False
 
 
 def _render_plan() -> None:
