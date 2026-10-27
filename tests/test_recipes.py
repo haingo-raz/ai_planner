@@ -66,6 +66,7 @@ SPOONACULAR_RESPONSE: dict[str, Any] = {
                     {"name": "Calories", "amount": 521.6, "unit": "kcal"},
                 ]
             },
+            "ingredients": [{"name": "pork"}, {"name": "pasta"}],
         }
     ],
     "offset": 0,
@@ -89,7 +90,7 @@ def test_search_recipes_maps_response(mocker: MockerFixture) -> None:
             title="Bruschetta Style Pork & Pasta",
             url="https://example.com/bruschetta-pork-pasta",
             calories=522,
-            ingredients=[],
+            ingredients=["pork", "pasta"],
         )
     ]
     url = mock_get.call_args.args[0]

@@ -12,12 +12,14 @@ def _to_recipe(result: dict[str, Any]) -> Recipe:
     nutrients = result.get("nutrition", {}).get("nutrients", [])
     calorie_entry = next((n for n in nutrients if n["name"] == "Calories"), None)
     calories = round(calorie_entry["amount"]) if calorie_entry else 0
+    raw_ingredients = result.get("ingredients") or result.get("extendedIngredients") or []
+    clean_ingredients = [ing.get("name", "") for ing in raw_ingredients if ing.get("name")]
     return Recipe(
         id=result["id"],
         title=result["title"],
         url=result["sourceUrl"],
         calories=calories,
-        ingredients=[],
+        ingredients=clean_ingredients,
     )
 
 
@@ -35,6 +37,7 @@ def search_recipes(
             "number": number,
             "addRecipeNutrition": "true",
             "addRecipeInformation": "true",
+            "fillIngredients": "true",
             "apiKey": settings.spoonacular_api_key,
         },
         timeout=settings.spoonacular_timeout,

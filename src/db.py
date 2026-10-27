@@ -52,7 +52,7 @@ def _recipe_from_dict(data: dict) -> Recipe:
         title=data["title"],
         url=data["url"],
         calories=data["calories"],
-        ingredients=list(data["ingredients"]),
+        ingredients=list(data.get("ingredients", [])),
     )
 
 
