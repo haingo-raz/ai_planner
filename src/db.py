@@ -36,11 +36,26 @@ class PlanRecord(SQLModel, table=True):
 _engine: Engine | None = None
 
 
+def _normalize_db_url(url: str) -> str:
+    """Rewrite a bare Postgres URL to the psycopg (v3) driver SQLAlchemy expects."""
+    if url.startswith("postgresql+"):
+        return url
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://"):]
+    return url
+
+
 def get_engine() -> Engine:
-    """Return the cached SQLite engine, creating tables on first call."""
+    """Return the cached engine, creating tables on first call."""
     global _engine
     if _engine is None:
-        _engine = create_engine(settings.database_url)
+        url = _normalize_db_url(settings.database_url)
+        if url.startswith("postgresql+psycopg://"):
+            _engine = create_engine(url, pool_pre_ping=True)
+        else:
+            _engine = create_engine(url)
         SQLModel.metadata.create_all(_engine)
     return _engine
 
