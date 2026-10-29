@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, messages_from_dict, messages_to_dict
 from pydantic import BaseModel, Field
 
@@ -75,6 +76,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Recipe Discovery Agent", version=VERSION, lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
